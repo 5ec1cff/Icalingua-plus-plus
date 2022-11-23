@@ -1,13 +1,17 @@
 import BilibiliMiniApp from '@icalingua/types/BilibiliMiniApp'
 import Message from '@icalingua/types/Message'
 import StructMessageCard from '@icalingua/types/StructMessageCard'
-import { base64decode } from 'nodejs-base64'
+import { base64decode, base64encode } from 'nodejs-base64'
 import { AtElem, FriendInfo, GroupMessageEventData, MemberBaseInfo, MessageElem } from 'oicq-icalingua-plus-plus'
 import path from 'path'
 import adapter from '../adapters/oicqAdapter'
 import getImageUrlByMd5 from './getImageUrlByMd5'
 import mime from './mime'
 import silkDecode from './silkDecode'
+import getStaticPath from './getStaticPath'
+
+const requireFunc = eval('require')
+const pb = requireFunc(path.join(getStaticPath(), 'pb.js'))
 
 const processMessage = async (oicqMessage: MessageElem[], message: Message, lastMessage, roomId = null) => {
     if (!Array.isArray(oicqMessage)) oicqMessage = [oicqMessage]
@@ -248,12 +252,75 @@ const processMessage = async (oicqMessage: MessageElem[], message: Message, last
                 break
             case 'record':
                 try {
+                    if (
+                        m.data.url == null &&
+                        typeof m.data.file == 'string' &&
+                        m.data.file.startsWith('protobuf://') &&
+                        roomId != null
+                    ) {
+                        let data = pb.decode(Buffer.from(m.data.file.slice('protobuf://'.length), 'base64'))
+                        if (roomId < 0) {
+                            let resp = await adapter.sendPacket(
+                                'Uni',
+                                'PttStore.GroupPttDown',
+                                pb.encode({
+                                    1: 3,
+                                    2: 4,
+                                    6: [
+                                        {
+                                            1: -roomId,
+                                            2: adapter.getUin(),
+                                            3: data[8],
+                                            4: data[4]._raw,
+                                            5: 5,
+                                            6: 9,
+                                            7: 0,
+                                            8: 3,
+                                            10: 0,
+                                            11: data[18]._raw,
+                                            14: 2,
+                                            15: 1,
+                                        },
+                                    ],
+                                }),
+                            )
+                            resp = pb.decode(pb.decode(resp)[6]._raw)
+                            m.data.url = `http://${resp[8].toString()}${resp[9].toString()}`
+                        } else {
+                            let resp = await adapter.sendPacket(
+                                'Uni',
+                                'PttCenterSvr.pb_pttCenter_CMD_REQ_APPLY_DOWNLOAD-1200',
+                                pb.encode({
+                                    1: 1200,
+                                    2: 0,
+                                    14: {
+                                        10: adapter.getUin(),
+                                        20: data[3]._raw,
+                                        30: 2,
+                                    },
+                                    101: 17,
+                                    102: 104,
+                                    99999: {
+                                        90300: 1,
+                                        91000: 2,
+                                        91100: 1,
+                                    },
+                                }),
+                            )
+                            let url = new URL(pb.decode(pb.decode(pb.decode(resp)[14]._raw)[30]._raw)[50].toString())
+                            // https 会有证书问题，降级为 http
+                            url.port = ""
+                            url.protocol = "http"
+                            m.data.url = url.toString();
+                        }
+                    }
                     message.file = {
                         type: 'audio/ogg',
                         url: await silkDecode(m.data.url),
                     }
                     message.files.push(message.file)
                 } catch (e) {
+                    console.error(e)
                     message.file = null
                     message.content = '[无法处理的语音]' + m.data.url
                     message.code = JSON.stringify({ error: e })

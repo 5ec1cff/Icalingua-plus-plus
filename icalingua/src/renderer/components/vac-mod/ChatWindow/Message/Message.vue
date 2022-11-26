@@ -189,7 +189,7 @@
                         </format-message>
 
                         <div class="vac-text-timestamp">
-                            <span>{{ message.timestamp }}</span>
+                            <span>{{ message.date + " " + message.timestamp }}</span>
                         </div>
                     </div>
                 </div>

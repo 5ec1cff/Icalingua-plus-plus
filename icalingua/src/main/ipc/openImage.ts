@@ -1,6 +1,6 @@
 import { execFileSync, execFile } from 'child_process'
 import which from 'which'
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow, ipcMain, clipboard, nativeImage } from 'electron'
 import path from 'path'
 import querystring from 'querystring'
 import getStaticPath from '../../utils/getStaticPath'
@@ -9,6 +9,7 @@ import md5 from 'md5'
 import { newIcalinguaWindow } from '../../utils/IcalinguaWindow'
 import { getMainWindowScreen } from '../utils/windowManager'
 import { toInteger } from 'lodash'
+import axios from 'axios'
 
 let viewer = ''
 const VIEWERS = ['gwenview', 'eog', 'eom', 'ristretto', 'okular', 'gimp']
@@ -47,6 +48,10 @@ const openImage = (url: string, external: boolean = false, urlList: Array<string
         } else {
             const viewerWindow = newIcalinguaWindow({
                 autoHideMenuBar: true,
+                webPreferences: {
+                    contextIsolation: false,
+                    preload: path.join(getStaticPath(), 'openImagePreload.js'),
+                },
             })
             // get main window screen location
             const bound = viewerWindow.getBounds()
@@ -76,7 +81,41 @@ const openImage = (url: string, external: boolean = false, urlList: Array<string
         ui.messageError('找不到可用的本地查看器')
     }
 }
+
+const copyImage = async (url: string) => {
+    // console.log(clipboard.availableFormats(),clipboard.read('text/uri-list'))
+    if (url.startsWith('data:')) {
+        // base64 图片
+        clipboard.writeImage(nativeImage.createFromDataURL(url))
+        return
+    }
+    // 如果url是本地地址，则直接读取
+    if (!url.startsWith('http')) {
+        const image = nativeImage.createFromPath(url)
+        if (!image.isEmpty()) {
+            clipboard.writeImage(image)
+        } else {
+            clipboard.writeHTML(`<img src="${url}" >`)
+            //clipboard.write({text: url, type: 'text/uri-list'})
+        }
+        return
+    }
+    const res = await axios.get(url, {
+        responseType: 'arraybuffer',
+        proxy: false,
+    })
+    const buf = Buffer.from(res.data, 'binary')
+    const image = nativeImage.createFromBuffer(buf)
+    if (!image.isEmpty()) {
+        clipboard.writeImage(image)
+    } else {
+        clipboard.writeHTML(`<img src="${url}" >`)
+    }
+}
+
 ipcMain.on('openImage', (e, url: string, external: boolean = false, urlList: Array<string> = []) =>
-    openImage(url, external, urlList),
+    openImage(url, external, urlList)
 )
-export default openImage
+ipcMain.on('copyImage', (e, url: string) => copyImage(url))
+
+export { openImage, copyImage }

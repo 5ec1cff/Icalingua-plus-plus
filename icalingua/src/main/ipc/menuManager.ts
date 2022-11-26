@@ -2,7 +2,6 @@ import Message from '@icalingua/types/Message'
 import OnlineStatusType from '@icalingua/types/OnlineStatusType'
 import Room from '@icalingua/types/Room'
 import SearchableGroup from '@icalingua/types/SearchableGroup'
-import axios from 'axios'
 import { app, clipboard, dialog, ipcMain, Menu, MenuItem, nativeImage, screen, shell } from 'electron'
 import fs from 'fs'
 import path from 'path'
@@ -53,7 +52,7 @@ import {
     sendPacket,
 } from './botAndStorage'
 import { download, downloadFileByMessageData, downloadImage } from './downloadManager'
-import openImage from './openImage'
+import { openImage, copyImage } from './openImage'
 
 const requireFunc = eval('require')
 const pb = requireFunc(path.join(getStaticPath(), 'pb.js'))
@@ -1848,36 +1847,7 @@ ipcMain.on('popupContactMenu', (_, remark?: string, name?: string, displayId?: n
     menu.popup({ window: getMainWindow() })
 })
 
-const copyImage = async (url: string) => {
-    // console.log(clipboard.availableFormats(),clipboard.read('text/uri-list'))
-    if (url.startsWith('data:')) {
-        // base64 图片
-        clipboard.writeImage(nativeImage.createFromDataURL(url))
-        return
-    }
-    // 如果url是本地地址，则直接读取
-    if (!url.startsWith('http')) {
-        const image = nativeImage.createFromPath(url)
-        if (!image.isEmpty()) {
-            clipboard.writeImage(image)
-        } else {
-            clipboard.writeHTML(`<img src="${url}" >`)
-            //clipboard.write({text: url, type: 'text/uri-list'})
-        }
-        return
-    }
-    const res = await axios.get(url, {
-        responseType: 'arraybuffer',
-        proxy: false,
-    })
-    const buf = Buffer.from(res.data, 'binary')
-    const image = nativeImage.createFromBuffer(buf)
-    if (!image.isEmpty()) {
-        clipboard.writeImage(image)
-    } else {
-        clipboard.writeHTML(`<img src="${url}" >`)
-    }
-}
+
 
 ipcMain.on(
     'popupGroupMemberMenu',

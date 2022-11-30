@@ -30,6 +30,7 @@ export function newIcalinguaWindow(options?: Electron.BrowserWindowConstructorOp
                     for (const i in cookies) {
                         await win1.webContents.session.cookies.set({
                             url: 'https://qun.qq.com',
+                            domain: '.qun.qq.com',
                             name: i,
                             value: cookies[i],
                         })

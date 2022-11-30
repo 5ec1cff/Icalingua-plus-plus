@@ -77,6 +77,7 @@ export const loadMainWindow = () => {
                 for (const i in cookies) {
                     await win.webContents.session.cookies.set({
                         url: 'https://qun.qq.com',
+                        domain: '.qun.qq.com',
                         name: i,
                         value: cookies[i],
                     })
